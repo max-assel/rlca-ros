@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(rlca_ros)
+project(rlca-ros)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++14)
@@ -193,7 +193,7 @@ include_directories(
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_rlca_ros.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_rlca-ros.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()
