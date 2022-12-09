@@ -57,12 +57,12 @@ class NN_tb3:
         self.psi = 0.0
 
         # publishers
-        self.pub_twist = rospy.Publisher("/cmd_vel", Twist, queue_size=1)
-        self.sub_pose = rospy.Subscriber("/odom", Odometry, self.cbPose)
+        self.pub_twist = rospy.Publisher("cmd_vel", Twist, queue_size=1)
+        self.sub_pose = rospy.Subscriber("odom", Odometry, self.cbPose)
         # Waiting for scan to be published
-        x = rospy.wait_for_message("/scan", LaserScan)
-        self.sub_subgoal = rospy.Subscriber("/subgoal", PoseStamped, self.cbSubGoal)
-        self.laser_sub = rospy.Subscriber("/scan", LaserScan, self.laser_scan_callback)
+        x = rospy.wait_for_message("scan", LaserScan)
+        self.sub_subgoal = rospy.Subscriber("subgoal", PoseStamped, self.cbSubGoal)
+        self.laser_sub = rospy.Subscriber("scan", LaserScan, self.laser_scan_callback)
 
         # control timer
         # self.control_timer = rospy.Timer(rospy.Duration(0.01),self.cbControl)
