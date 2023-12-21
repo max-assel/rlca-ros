@@ -54,6 +54,7 @@ class NN_tb3:
         # for subscribers
         self.pose = PoseStamped()
         self.vel = Vector3()
+        self.vel_angular = 0
         self.psi = 0.0
 
         # publishers
@@ -199,7 +200,7 @@ class NN_tb3:
             self.env, obs_state_list, self.policy, self.action_bound
         )
         action = scaled_action[0]
-        action[0] =  0.3 * action[0]  # the maximum speed of cmd_vel 0.3
+        action[0] *=  float(rospy.get_param("~max_vel_x", 0.3)) # the maximum speed of cmd_vel
         self.control_vel(action)
         # self.update_action(action)
 
@@ -251,7 +252,7 @@ def run():
     env = StageWorld(
         OBS_SIZE, index=0, num_env=NUM_ENV
     )  # index is useful for parallel programming, 0 is for the first agent
-    trained_model_file = os.path.dirname(__file__) + "/policy/stage2.pth"
+    trained_model_file = os.path.dirname(__file__) + "/policy/stage1_2.pth"
     policy = CNNPolicy(frames=LASER_HIST, action_space=2)
     policy.cpu()  # policy.cuda() for gpu
     state_dict = torch.load(
