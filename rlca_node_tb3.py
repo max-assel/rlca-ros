@@ -51,6 +51,8 @@ class NN_tb3:
         self.sub_goal = Vector3()
         self.sub_goal.x = self.sub_goal.y = None
 
+        self.max_vel_x = 1.0
+
         # for subscribers
         self.pose = PoseStamped()
         self.vel = Vector3()
@@ -199,8 +201,12 @@ class NN_tb3:
         _, scaled_action = generate_action_no_sampling(
             self.env, obs_state_list, self.policy, self.action_bound
         )
+
+        print("scaled_action: ", scaled_action)
         action = scaled_action[0]
-        action[0] *=  float(rospy.get_param("~max_vel_x", 0.3)) # the maximum speed of cmd_vel
+        # print("float(rospy.get_param('~max_vel_x', 0.3): ", float(rospy.get_param("~max_vel_x", 0.3)))
+
+        action[0] *=  self.max_vel_x # the maximum speed of cmd_vel
         self.control_vel(action)
         # self.update_action(action)
 
