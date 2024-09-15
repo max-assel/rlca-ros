@@ -61,11 +61,16 @@ class NN_tb3:
 
         # publishers
         self.pub_twist = rospy.Publisher("cmd_vel", Twist, queue_size=1)
+        self.tmp_pub_twist = rospy.Publisher("learned_cmd_vel", Twist, queue_size=1)
         self.sub_pose = rospy.Subscriber("odom", Odometry, self.cbPose)
         # Waiting for scan to be published
         x = rospy.wait_for_message("scan", LaserScan)
         self.sub_subgoal = rospy.Subscriber("subgoal", PoseStamped, self.cbSubGoal)
         self.laser_sub = rospy.Subscriber("scan", LaserScan, self.laser_scan_callback)
+
+        self.norm_scan_tmin2 = np.zeros(512)
+        self.norm_scan_tmin1 = np.zeros(512)
+        self.norm_scan = np.zeros(512)
 
         # control timer
         # self.control_timer = rospy.Timer(rospy.Duration(0.01),self.cbControl)
@@ -87,7 +92,7 @@ class NN_tb3:
     def cbSubGoal(self, msg):
         self.sub_goal.x = msg.pose.position.x
         self.sub_goal.y = msg.pose.position.y
-        # print "new subgoal: "+str(self.sub_goal)
+        print("new subgoal: "+str(self.sub_goal))
 
     def cbPose(self, msg):
         self.cbVel(msg)
@@ -121,32 +126,36 @@ class NN_tb3:
 
     def get_laser_observation(self):
         scan = copy.deepcopy(self.scan)
-        sub_array = np.hsplit(
-            scan, 4
-        )  # adapt scan info when min and max angel equal to [-1.57,4.69] (rlca is [-3.14,3.14])
-        scan = np.concatenate(
-            (sub_array[3], sub_array[0], sub_array[1], sub_array[2])
-        )  # adapt scan info when min and max angel equal to [-1.57,4.69] (rlca is [-3.14,3.14])
-        # max_range = rospy.get_param("/laser/range")
-        scan[np.isnan(scan)] = 6.0
-        scan[np.isinf(scan)] = 6.0
-        raw_beam_num = len(scan)
-        sparse_beam_num = self.beam_mum
-        step = float(raw_beam_num) / sparse_beam_num
-        sparse_scan_left = []
-        index = 0.0
-        for x in range(int(sparse_beam_num / 2)):
-            sparse_scan_left.append(scan[int(index)])
-            index += step
-        sparse_scan_right = []
-        index = raw_beam_num - 1.0
-        for x in range(int(sparse_beam_num / 2)):
-            sparse_scan_right.append(scan[int(index)])
-            index -= step
-        scan_sparse = np.concatenate(
-            (sparse_scan_left, sparse_scan_right[::-1]), axis=0
-        )
-        return scan_sparse / 6.0 - 0.5
+        # sub_array = np.hsplit(
+        #     scan, 4
+        # )  # adapt scan info when min and max angel equal to [-1.57,4.69] (rlca is [-3.14,3.14])
+        # scan = np.concatenate(
+        #     (sub_array[3], sub_array[0], sub_array[1], sub_array[2])
+        # )  # adapt scan info when min and max angel equal to [-1.57,4.69] (rlca is [-3.14,3.14])
+        max_range = 5.0 # rospy.get_param("/laser/range")
+        scan[np.isnan(scan)] = max_range
+        scan[np.isinf(scan)] = max_range
+        # raw_beam_num = len(scan)
+        # sparse_beam_num = self.beam_mum
+        # step = float(raw_beam_num) / sparse_beam_num
+        # sparse_scan_left = []
+        # index = 0.0
+        # for x in range(int(sparse_beam_num / 2)):
+        #     sparse_scan_left.append(scan[int(index)])
+        #     index += step
+        # sparse_scan_right = []
+        # index = raw_beam_num - 1.0
+        # for x in range(int(sparse_beam_num / 2)):
+        #     sparse_scan_right.append(scan[int(index)])
+        #     index -= step
+        # scan_sparse = np.concatenate(
+        #     (sparse_scan_left, sparse_scan_right[::-1]), axis=0
+        # )
+
+        self.norm_scan_tmin2 = self.norm_scan_tmin1
+        self.norm_scan_tmin1 = self.norm_scan
+        self.norm_scan = scan / max_range - 0.5
+        return 
 
     def control_vel(self, action):
         move_cmd = Twist()
@@ -157,6 +166,7 @@ class NN_tb3:
         move_cmd.angular.y = 0.0
         move_cmd.angular.z = action[1]
         self.pub_twist.publish(move_cmd)
+        self.tmp_pub_twist.publish(move_cmd)
 
     # def control_pose(self, pose):
     #     pose_cmd = PoseStamped.Pose()
@@ -184,14 +194,21 @@ class NN_tb3:
             # print(self.scan)
             pass
         # ************************************ Input ************************************
-        obs = self.get_laser_observation()
-        obs_stack = deque([obs, obs, obs])
+        self.get_laser_observation()
+        # obs_stack = deque([obs, obs, obs])
+        obs_stack = deque([self.norm_scan_tmin2, self.norm_scan_tmin1, self.norm_scan])
         self.state = [
             self.pose.pose.position.x,
             self.pose.pose.position.y,
             self.psi,
         ]  # x, y, theta
         self.goal = np.asarray(self.get_local_goal())
+
+        print("self.goal: ", self.goal)
+
+        print("self.vel: ", self.vel)
+        print("self.vel_angular: ", self.vel_angular)
+
         self.speed = np.asarray([self.vel.x, self.vel_angular], dtype="float64")
 
         obs_state_list = [[obs_stack, self.goal, self.speed]]
@@ -205,6 +222,8 @@ class NN_tb3:
         print("scaled_action: ", scaled_action)
         action = scaled_action[0]
         # print("float(rospy.get_param('~max_vel_x', 0.3): ", float(rospy.get_param("~max_vel_x", 0.3)))
+
+        print("action: ", action)
 
         action[0] *=  self.max_vel_x # the maximum speed of cmd_vel
         self.control_vel(action)
@@ -252,7 +271,7 @@ def run():
     LASER_HIST = 3
     NUM_ENV = 1  # the number of agents in the environment
     OBS_SIZE = 512  # number of leaserbeam
-    action_bound = [[-1, -1], [1, 1]]  # the limitation of velocity
+    action_bound = [[0.0, -1.0], [1, 1]]  # the limitation of velocity
 
     # Set env and agent policy
     env = StageWorld(
